@@ -1,0 +1,7 @@
+[theme]
+# Claude Code inspired color scheme
+primaryColor = "#D97757"
+backgroundColor = "#1a1a1a"
+secondaryBackgroundColor = "#2d2d2d"
+textColor = "#e8e8e8"
+font = "sans serif"
