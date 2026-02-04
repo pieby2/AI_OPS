@@ -1,5 +1,7 @@
 # AI Operations Assistant
 
+[![Try it Live](https://img.shields.io/badge/Try%20it-Live%20Demo-D97757?style=for-the-badge)](https://pieby2-ai-ops-app-mnt3ik.streamlit.app/)
+
 A multi-agent AI system that accepts natural-language tasks, plans execution steps, calls APIs, and returns structured answers.
 
 ## Features
