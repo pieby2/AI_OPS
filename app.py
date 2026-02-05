@@ -9,6 +9,7 @@ load_dotenv()
 from agents import PlannerAgent, ExecutorAgent, VerifierAgent
 from metrics import get_metrics_tracker
 from cache import get_cache_manager
+from memory import get_memory_manager
 
 # Page configuration
 st.set_page_config(
@@ -138,6 +139,7 @@ def execute_task(task: str):
         # Step 1: Planning
         with st.status("🧠 Creating execution plan...", expanded=True) as status:
             plan = planner.create_plan(task)
+            st.write(f"**💭 Reasoning:** {plan.get('reasoning', 'N/A')}")
             st.write(f"**Steps:** {len(plan['steps'])}")
             st.write(f"**Tools needed:** {', '.join(plan['tools_needed'])}")
             status.update(label="✅ Plan created!", state="complete")
@@ -161,6 +163,16 @@ def execute_task(task: str):
         
         execution_time = time.time() - start_time
         request_metrics = metrics.end_request()
+        
+        # Save to memory for long-term history
+        memory = get_memory_manager()
+        memory.save_interaction(
+            task=task,
+            tools_used=plan.get('tools_needed', []),
+            final_answer=final_answer,
+            execution_time=execution_time,
+            success=True
+        )
         
         return {
             "success": True,
@@ -191,6 +203,8 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
         
+        st.info("🔐 **Security Notice:** Please use your own API key. Never share API keys publicly.", icon="ℹ️")
+        
         # API Key Input
         api_key_input = st.text_input(
             "Groq API Key",
@@ -198,6 +212,7 @@ def main():
             placeholder="gsk_...",
             help="Enter your Groq API key to override the .env file"
         )
+        st.markdown("[🔑 Get your API key here](https://console.groq.com/keys)", unsafe_allow_html=True)
         if api_key_input:
             os.environ["GROQ_API_KEY"] = api_key_input
         
@@ -244,6 +259,53 @@ def main():
         st.write("- **GitHub**: Search repositories")
         st.write("- **Weather**: Get current weather")
         st.write("- **News**: Search news articles")
+        
+        st.divider()
+        
+        # Query History Section
+        st.header("📜 Query History")
+        memory = get_memory_manager()
+        history_stats = memory.get_history_stats()
+        st.caption(f"Total queries: {history_stats['total_queries']}")
+        
+        recent_queries = memory.get_recent_queries(limit=5)
+        if recent_queries:
+            for query in recent_queries:
+                task_preview = query['task'][:40] + "..." if len(query['task']) > 40 else query['task']
+                if st.button(f"🔄 {task_preview}", key=f"history_{query['id']}", use_container_width=True):
+                    st.session_state['selected_task'] = query['task']
+                    st.rerun()
+        else:
+            st.caption("No queries yet")
+        
+        if st.button("🗑️ Clear History", key="clear_history"):
+            count = memory.clear_history()
+            st.success(f"Cleared {count} queries")
+            st.rerun()
+        
+        st.divider()
+        
+        # User Preferences Section
+        st.header("⚙️ Preferences")
+        
+        # Default city preference
+        current_city = memory.get_preference("default_city", "")
+        new_city = st.text_input("Default City", value=current_city, placeholder="e.g., London")
+        if new_city != current_city:
+            if new_city:
+                memory.set_preference("default_city", new_city)
+            else:
+                memory.delete_preference("default_city")
+        
+        # Temperature units preference
+        current_units = memory.get_preference("temp_units", "metric")
+        new_units = st.selectbox(
+            "Temperature Units",
+            options=["metric", "imperial"],
+            index=0 if current_units == "metric" else 1
+        )
+        if new_units != current_units:
+            memory.set_preference("temp_units", new_units)
     
     # Main content
     st.subheader("💬 Enter Your Task")
@@ -265,10 +327,16 @@ def main():
             if st.button(f"📝 {example[:25]}...", key=f"example_{i}", use_container_width=True):
                 selected_example = example
     
-    # Task input
+    # Task input - use selected example OR selected from history
+    default_task = ""
+    if selected_example:
+        default_task = selected_example
+    elif 'selected_task' in st.session_state:
+        default_task = st.session_state.pop('selected_task')
+    
     task_input = st.text_area(
         "Describe what you want to do:",
-        value=selected_example if selected_example else "",
+        value=default_task,
         height=100,
         placeholder="e.g., 'What's the weather in Paris and find popular AI repos on GitHub?'"
     )

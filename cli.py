@@ -14,6 +14,7 @@ load_dotenv()
 from agents import PlannerAgent, ExecutorAgent, VerifierAgent
 from metrics import get_metrics_tracker
 from cache import get_cache_manager
+from memory import get_memory_manager
 
 
 # ANSI color codes for terminal output
@@ -116,6 +117,16 @@ def execute_task(task: str, show_details: bool = True) -> dict:
         print(f"\n{Colors.DIM}⏱  Time: {execution_time:.2f}s | "
               f"🔢 Tokens: {request_metrics['total_tokens']} | "
               f"💰 Cost: ${request_metrics['estimated_cost_usd']:.4f}{Colors.ENDC}\n")
+        
+        # Save to memory for long-term history
+        memory = get_memory_manager()
+        memory.save_interaction(
+            task=task,
+            tools_used=plan.get('tools_needed', []),
+            final_answer=final_answer,
+            execution_time=execution_time,
+            success=True
+        )
         
         return {
             "success": True,
