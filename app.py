@@ -192,6 +192,15 @@ def execute_task(task: str):
 
 
 def main():
+    # Log visit (only once per session)
+    memory = get_memory_manager()
+    if 'visit_logged' not in st.session_state:
+        import uuid
+        session_id = str(uuid.uuid4())[:8]
+        memory.log_visit(session_id=session_id, page="home")
+        st.session_state['visit_logged'] = True
+        st.session_state['session_id'] = session_id
+    
     # Header
     st.markdown('<h1 class="main-header">🤖 AI Operations Assistant</h1>', unsafe_allow_html=True)
     st.markdown(
@@ -306,6 +315,38 @@ def main():
         )
         if new_units != current_units:
             memory.set_preference("temp_units", new_units)
+        
+        st.divider()
+        
+        # Visit Analytics Section
+        st.header("👁️ Visit Analytics")
+        visit_stats = memory.get_visit_stats()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Visits", visit_stats['total_visits'])
+        with col2:
+            st.metric("Today", visit_stats['visits_today'])
+        
+        if visit_stats['first_visit']:
+            st.caption(f"First visit: {visit_stats['first_visit'][:16]}")
+        if visit_stats['last_visit']:
+            st.caption(f"Last visit: {visit_stats['last_visit'][:16]}")
+        
+        # Recent visits expander
+        with st.expander("📊 Recent Visits"):
+            recent_visits = memory.get_recent_visits(limit=10)
+            if recent_visits:
+                for v in recent_visits:
+                    timestamp = v['timestamp'][:16].replace('T', ' ')
+                    st.text(f"🕐 {timestamp}")
+            else:
+                st.caption("No visits recorded yet")
+        
+        if st.button("🗑️ Clear Visits", key="clear_visits"):
+            count = memory.clear_visits()
+            st.success(f"Cleared {count} visits")
+            st.rerun()
     
     # Main content
     st.subheader("💬 Enter Your Task")

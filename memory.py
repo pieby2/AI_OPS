@@ -70,6 +70,17 @@ class MemoryManager:
             )
         """)
         
+        # Site visits table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS visits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                session_id TEXT,
+                user_agent TEXT,
+                page TEXT DEFAULT 'home'
+            )
+        """)
+        
         conn.commit()
     
     # ========================
@@ -322,6 +333,104 @@ class MemoryManager:
         count = cursor.fetchone()[0]
         
         cursor.execute("DELETE FROM preferences")
+        conn.commit()
+        
+        return count
+    
+    # ========================
+    # Visit Tracking Methods
+    # ========================
+    
+    def log_visit(self, session_id: str = None, user_agent: str = None, page: str = "home") -> int:
+        """
+        Log a site visit
+        
+        Args:
+            session_id: Unique session identifier
+            user_agent: Browser user agent string
+            page: Page visited
+            
+        Returns:
+            The ID of the inserted record
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO visits (timestamp, session_id, user_agent, page)
+            VALUES (?, ?, ?, ?)
+        """, (
+            datetime.now().isoformat(),
+            session_id,
+            user_agent,
+            page
+        ))
+        
+        conn.commit()
+        return cursor.lastrowid
+    
+    def get_recent_visits(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Get the most recent visits
+        
+        Args:
+            limit: Maximum number of visits to return
+            
+        Returns:
+            List of visit records
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, timestamp, session_id, page
+            FROM visits
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    
+    def get_visit_stats(self) -> Dict[str, Any]:
+        """Get statistics about site visits"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM visits")
+        total = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM visits")
+        row = cursor.fetchone()
+        first_visit = row[0] if row[0] else None
+        last_visit = row[1] if row[1] else None
+        
+        # Visits today
+        today = datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("SELECT COUNT(*) FROM visits WHERE timestamp LIKE ?", (f"{today}%",))
+        today_count = cursor.fetchone()[0]
+        
+        return {
+            "total_visits": total,
+            "visits_today": today_count,
+            "first_visit": first_visit,
+            "last_visit": last_visit
+        }
+    
+    def clear_visits(self) -> int:
+        """
+        Clear all visit records
+        
+        Returns:
+            Number of records deleted
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM visits")
+        count = cursor.fetchone()[0]
+        
+        cursor.execute("DELETE FROM visits")
         conn.commit()
         
         return count
